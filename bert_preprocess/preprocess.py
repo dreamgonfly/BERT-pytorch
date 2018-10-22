@@ -15,7 +15,7 @@ def preprocess_index(config):
     def token_generator(data_path):
         with open(data_path) as file:
             for document in file:
-                for sentence in document.strip().split('\t'):
+                for sentence in document.strip().split('|'):
                     for token in sentence.split():
                         yield token
 

@@ -10,7 +10,7 @@ class IndexedCorpus:
         with open(data_path) as file:
             for document in file:
                 indexed_document = []
-                for sentence in document.split('\t'):
+                for sentence in document.split('|'):
                     indexed_sentence = []
                     for token in sentence.strip().split():
                         indexed_token = dictionary.token_to_index(token)

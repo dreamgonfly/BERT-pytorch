@@ -19,7 +19,7 @@ First things first, you need to prepare your data in an appropriate format.
 Your corpus is assumed to follow the below constraints.
 
 - Each line is a *document*.
-- A *document* consists of *sentences*, seperated by tab (\t).
+- A *document* consists of *sentences*, seperated by vertical bar (|).
 - A *sentence* is assumed to be already tokenized. Tokens are seperated by space.
 - A *sentence* has no more than 256 tokens.
 - A *document* has at least 2 sentences. 
@@ -29,9 +29,9 @@ This repo comes with example data for pretraining in data/example directory.
 Here is the content of data/example/train.txt file.
 
 ```
-One, two, three, four, five, \t Once I caught a fish alive, \t Six, seven, eight, nine, ten, \t Then I let go again. \n
-I’m a little teapot \t Short and stout \t Here is my handle \t Here is my spout. \n
-Jack and Jill went up the hill \t To fetch a pail of water. \t Jack fell down and broke his crown, \t And Jill came tumbling after. \n  
+One, two, three, four, five,|Once I caught a fish alive,|Six, seven, eight, nine, ten,|Then I let go again.
+I’m a little teapot|Short and stout|Here is my handle|Here is my spout.
+Jack and Jill went up the hill|To fetch a pail of water.|Jack fell down and broke his crown,|And Jill came tumbling after.  
 ```
 
 Also, this repo includes SST-2 data in data/SST-2 directory for sentiment classification.
