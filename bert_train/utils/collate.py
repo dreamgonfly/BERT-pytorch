@@ -1,4 +1,4 @@
-from .. import PAD_INDEX
+from bert_preprocess import PAD_INDEX
 
 
 def pretraining_collate_fn(batch):

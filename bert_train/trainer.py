@@ -15,12 +15,12 @@ class Trainer:
     def __init__(self, model,
                  train_dataloader, val_dataloader,
                  loss_function, metric_functions, optimizer,
+                 clip_grads,
                  logger, run_name,
-                 config_filename, checkpoint_filename,
+                 config_output, checkpoint_output,
                  config):
 
-        self.config = config
-        self.device = torch.device(self.config['device'])
+        self.device = torch.device(config['device'])
 
         self.model = model.to(self.device)
         self.train_dataloader = train_dataloader
@@ -29,22 +29,23 @@ class Trainer:
         self.loss_function = loss_function.to(self.device)
         self.metric_functions = metric_functions
         self.optimizer = optimizer
-        self.clip_grads = self.config['clip_grads']
+        self.clip_grads = clip_grads
 
         self.logger = logger
         self.checkpoint_dir = join(CHECKPOINT_DIR, run_name)
         if not exists(self.checkpoint_dir):
             makedirs(self.checkpoint_dir)
 
-        if config_filename is None:
-            config_filepath = join(self.checkpoint_dir, 'config.json')
+        if config_output is None:
+            config_output_path = join(self.checkpoint_dir, 'config.json')
         else:
-            config_filepath = join(CHECKPOINT_DIR, config_filename)
-        with open(config_filepath, 'w') as config_file:
-            json.dump(self.config, config_file)
+            config_output_path = config_output
+        with open(config_output_path, 'w') as config_file:
+            del config['function']
+            json.dump(config, config_file)
 
-        self.print_every = self.config['print_every']
-        self.save_every = self.config['save_every']
+        self.print_every = config['print_every']
+        self.save_every = config['save_every']
 
         self.epoch = 0
         self.history = []
@@ -52,9 +53,9 @@ class Trainer:
         self.start_time = datetime.now()
 
         self.best_val_metric = None
-        self.best_checkpoint_filepath = None
+        self.best_checkpoint_output_path = None
 
-        self.checkpoint_filename = checkpoint_filename
+        self.checkpoint_output = checkpoint_output
         self.save_format = 'epoch={epoch:0>3}-val_loss={val_loss:<.3}-val_metrics={val_metrics}.pth'
 
         self.log_format = (
@@ -145,16 +146,16 @@ class Trainer:
 
     def _save_model(self, epoch, train_epoch_loss, val_epoch_loss, train_epoch_metrics, val_epoch_metrics):
 
-        default_checkpoint_filename = self.save_format.format(
+        default_checkpoint_output = self.save_format.format(
             epoch=epoch,
             val_loss=val_epoch_loss,
             val_metrics='-'.join(['{:<.3}'.format(v) for v in val_epoch_metrics])
         )
 
-        if self.checkpoint_filename is None:
-            checkpoint_filepath = join(self.checkpoint_dir, default_checkpoint_filename)
+        if self.checkpoint_output is None:
+            checkpoint_output_path = join(self.checkpoint_dir, default_checkpoint_output)
         else:
-            checkpoint_filepath = join(CHECKPOINT_DIR, self.checkpoint_filename)
+            checkpoint_output_path = self.checkpoint_output
 
         save_state = {
             'epoch': epoch,
@@ -162,11 +163,11 @@ class Trainer:
             'train_metrics': train_epoch_metrics,
             'val_loss': val_epoch_loss,
             'val_metrics': val_epoch_metrics,
-            'checkpoint': checkpoint_filepath,
+            'checkpoint': checkpoint_output_path,
         }
 
         if self.epoch > 0:
-            torch.save(self.model.state_dict(), checkpoint_filepath)
+            torch.save(self.model.state_dict(), checkpoint_output_path)
             self.history.append(save_state)
 
         representative_val_metric = val_epoch_metrics[0]
@@ -176,12 +177,12 @@ class Trainer:
             self.val_loss_at_best = val_epoch_loss
             self.train_metrics_at_best = train_epoch_metrics
             self.train_loss_at_best = train_epoch_loss
-            self.best_checkpoint_filepath = checkpoint_filepath
+            self.best_checkpoint_output_path = checkpoint_output_path
             self.best_epoch = self.epoch
 
         if self.logger:
-            self.logger.info("Saved model to {}".format(checkpoint_filepath))
-            self.logger.info("Current best model is {}".format(self.best_checkpoint_filepath))
+            self.logger.info("Saved model to {}".format(checkpoint_output_path))
+            self.logger.info("Current best model is {}".format(self.best_checkpoint_output_path))
 
     def _elapsed_time(self):
         now = datetime.now()

@@ -26,8 +26,8 @@ def get_logger(run_name, log_filepath):
     return logger
 
 
-def make_run_name(config):
-    run_name = RUN_NAME_FORMAT.format(**config, timestamp=datetime.now().strftime("%Y_%m_%d_%H_%M_%S"))
+def make_run_name(config, phase):
+    run_name = RUN_NAME_FORMAT.format(**config, phase=phase, timestamp=datetime.now().strftime("%Y_%m_%d_%H_%M_%S"))
     return run_name
 
 
@@ -35,9 +35,9 @@ def make_log_filepath(config):
     run_name = config['run_name']
 
     log_filename_default = f'{run_name}.log'
-    if config['log_filename'] is None:
+    if config['log'] is None:
         log_filepath = join(LOG_DIR, log_filename_default)
     else:
-        log_filepath = join(LOG_DIR, config['log_filename'])
+        log_filepath = config['log']
 
     return log_filepath

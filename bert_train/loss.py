@@ -1,4 +1,4 @@
-from . import PAD_INDEX
+from bert_preprocess import PAD_INDEX
 from .utils.convert import convert_to_tensor
 
 from torch import nn

@@ -1,9 +1,6 @@
-from . import DATA_DIR
 from . import PAD_TOKEN, UNK_TOKEN, MASK_TOKEN, CLS_TOKEN, SEP_TOKEN
 
 from collections import Counter
-from os.path import join, exists
-from os import makedirs
 
 
 class IndexDictionary:
@@ -49,24 +46,17 @@ class IndexDictionary:
     def tokenify_indexes(self, token_indexes):
         return [self.index_to_token(token_index) for token_index in token_indexes]
 
-    def save(self, data_dir='example'):
-        dictionary_dir = join(DATA_DIR, data_dir, 'dictionary')
-        if not exists(dictionary_dir):
-            makedirs(dictionary_dir)
-
-        vocabulary_filepath = join(dictionary_dir, 'vocabulary.txt')
-        with open(vocabulary_filepath, 'w') as file:
+    def save(self, dictionary_path):
+        with open(dictionary_path, 'w') as file:
             for vocab_index, (vocab_token, count) in enumerate(zip(self.vocab_tokens, self.token_counts)):
                 file.write(str(vocab_index) + '\t' + vocab_token + '\t' + str(count) + '\n')
 
     @classmethod
-    def load(cls, data_dir='example', vocabulary_size=None):
-        vocabulary_filepath = join(DATA_DIR, data_dir, 'dictionary', 'vocabulary.txt')
-
+    def load(cls, dictionary_path, vocabulary_size=None):
         vocab_tokens = {}
         token_counts = []
 
-        with open(vocabulary_filepath) as file:
+        with open(dictionary_path) as file:
             for line in file:
                 vocab_index, vocab_token, count = line.strip().split('\t')
                 vocab_index = int(vocab_index)

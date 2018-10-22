@@ -1,75 +1,8 @@
-from .embeddings import PositionalEmbedding, SegmentEmbedding
-from .utils.pad import pad_masking
+from .gelu import GELU
 
 import torch
 from torch import nn
 import numpy as np
-
-
-def build_model(config, vocabulary_size):
-    token_embedding = nn.Embedding(num_embeddings=vocabulary_size, embedding_dim=config['hidden_size'])
-    positional_embedding = PositionalEmbedding(max_len=config['max_len'], hidden_size=config['hidden_size'])
-    segment_embedding = SegmentEmbedding(hidden_size=config['hidden_size'])
-
-    encoder = TransformerEncoder(
-        layers_count=config['layers_count'],
-        d_model=config['hidden_size'],
-        heads_count=config['heads_count'],
-        d_ff=config['d_ff'],
-        dropout_prob=config['dropout_prob'])
-
-    bert = BERT(
-        encoder=encoder,
-        token_embedding=token_embedding,
-        positional_embedding=positional_embedding,
-        segment_embedding=segment_embedding,
-        hidden_size=config['hidden_size'],
-        vocabulary_size=vocabulary_size)
-
-    return bert
-
-
-class FineTuneModel(nn.Module):
-
-    def __init__(self, pretrained_model, num_classes, config):
-        super(FineTuneModel, self).__init__()
-
-        self.pretrained_model = pretrained_model
-
-        new_classification_layer = nn.Linear(config['hidden_size'], num_classes)
-        self.pretrained_model.classification_layer = new_classification_layer
-
-    def forward(self, inputs):
-        sequence, segment = inputs
-        token_predictions, classification_outputs = self.pretrained_model((sequence, segment))
-        return classification_outputs
-
-
-class BERT(nn.Module):
-
-    def __init__(self, encoder, token_embedding, positional_embedding, segment_embedding, hidden_size, vocabulary_size):
-        super(BERT, self).__init__()
-
-        self.encoder = encoder
-        self.token_embedding = token_embedding
-        self.positional_embedding = positional_embedding
-        self.segment_embedding = segment_embedding
-        self.token_prediction_layer = nn.Linear(hidden_size, vocabulary_size)
-        self.classification_layer = nn.Linear(hidden_size, 2)
-
-    def forward(self, inputs):
-        sequence, segment = inputs
-        token_embedded = self.token_embedding(sequence)
-        positional_embedded = self.positional_embedding(sequence)
-        segment_embedded = self.segment_embedding(segment)
-        embedded_sources = token_embedded + positional_embedded + segment_embedded
-
-        mask = pad_masking(sequence)
-        encoded_sources = self.encoder(embedded_sources, mask)
-        token_predictions = self.token_prediction_layer(encoded_sources)
-        classification_embedding = encoded_sources[:, 0, :]
-        classification_output = self.classification_layer(classification_embedding)
-        return token_predictions, classification_output
 
 
 class TransformerEncoder(nn.Module):
@@ -205,30 +138,21 @@ class MultiHeadAttention(nn.Module):
         batch_size, value_len, d_model = value_projected.size()
 
         query_heads = query_projected.view(batch_size, query_len, self.heads_count, d_head).transpose(1, 2)  # (batch_size, heads_count, query_len, d_head)
-        # print('query_heads', query_heads.shape)
-        # print(batch_size, key_len, self.heads_count, d_head)
-        # print(key_projected.shape)
         key_heads = key_projected.view(batch_size, key_len, self.heads_count, d_head).transpose(1, 2)  # (batch_size, heads_count, key_len, d_head)
         value_heads = value_projected.view(batch_size, value_len, self.heads_count, d_head).transpose(1, 2)  # (batch_size, heads_count, value_len, d_head)
 
         attention_weights = self.scaled_dot_product(query_heads, key_heads)  # (batch_size, heads_count, query_len, key_len)
 
         if mask is not None:
-            # print('mode', self.mode)
-            # print('mask', mask.shape)
-            # print('attention_weights', attention_weights.shape)
             mask_expanded = mask.unsqueeze(1).expand_as(attention_weights)
             attention_weights = attention_weights.masked_fill(mask_expanded, -1e18)
 
         self.attention = self.softmax(attention_weights)  # Save attention to the object
-        # print('attention_weights', attention_weights.shape)
         attention_dropped = self.dropout(self.attention)
         context_heads = torch.matmul(attention_dropped, value_heads)  # (batch_size, heads_count, query_len, d_head)
-        # print('context_heads', context_heads.shape)
         context_sequence = context_heads.transpose(1, 2).contiguous()  # (batch_size, query_len, heads_count, d_head)
         context = context_sequence.view(batch_size, query_len, d_model)  # (batch_size, query_len, d_model)
         final_output = self.final_projection(context)
-        # print('final_output', final_output.shape)
 
         return final_output
 
@@ -253,7 +177,7 @@ class PointwiseFeedForwardNetwork(nn.Module):
         self.feed_forward = nn.Sequential(
             nn.Linear(d_model, d_ff),
             nn.Dropout(dropout_prob),
-            nn.ReLU(),
+            GELU(),
             nn.Linear(d_ff, d_model),
             nn.Dropout(dropout_prob),
         )

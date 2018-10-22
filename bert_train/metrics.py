@@ -1,4 +1,4 @@
-from . import PAD_INDEX
+from bert_preprocess import PAD_INDEX
 
 from torch import nn
 import numpy as np
