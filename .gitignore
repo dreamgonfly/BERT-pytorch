@@ -2,7 +2,7 @@ checkpoints/
 logs/
 data/*
 !data/SST-2/*.tsv
-!data/example/*.txt
+!data/wiki-example/*.txt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

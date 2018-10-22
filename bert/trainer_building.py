@@ -3,7 +3,7 @@ from .loss import MLMNSPLoss, ClassificationLoss
 from .metrics import MLMAccuracyMetric, NSPAccuracyMetric, ClassificationAccracyMetric
 from .dictionary import IndexDictionary
 from .datasets.pretraining import PairedDataset
-from .datasets.classification import DummyDataset
+from .datasets.classification import SST2IndexedDataset
 from .trainer import Trainer
 from .utils.log import get_logger
 from .utils.collate import pretraining_collate_fn, classification_collate_fn
@@ -27,13 +27,13 @@ def run_pretraining(config):
     logger.info(config)
 
     logger.info('Constructing dictionaries...')
-    dictionary = IndexDictionary.load(data_dir=config['data_dir'], vocabulary_size=config['vocabulary_size'])
+    dictionary = IndexDictionary.load(data_dir=config['pretraining_data_dir'], vocabulary_size=config['vocabulary_size'])
     vocabulary_size = len(dictionary)
     logger.info(f'dictionary vocabulary : {vocabulary_size} tokens')
 
     logger.info('Loading datasets...')
-    train_dataset = PairedDataset('train', data_dir=config['data_dir'], vocabulary_size=vocabulary_size)
-    val_dataset = PairedDataset('val', data_dir=config['data_dir'], vocabulary_size=vocabulary_size)
+    train_dataset = PairedDataset('train', data_dir=config['pretraining_data_dir'], vocabulary_size=vocabulary_size)
+    val_dataset = PairedDataset('val', data_dir=config['pretraining_data_dir'], vocabulary_size=vocabulary_size)
     logger.info('Train dataset size : {dataset_size}'.format(dataset_size=len(train_dataset)))
 
     logger.info('Building model...')
@@ -87,13 +87,13 @@ def run_finetuning(config):
     logger.info(config)
 
     logger.info('Constructing dictionaries...')
-    dictionary = IndexDictionary.load(data_dir=config['data_dir'], vocabulary_size=config['vocabulary_size'])
+    dictionary = IndexDictionary.load(data_dir=config['pretraining_data_dir'], vocabulary_size=config['vocabulary_size'])
     vocabulary_size = len(dictionary)
     logger.info(f'dictionary vocabulary : {vocabulary_size} tokens')
 
     logger.info('Loading datasets...')
-    train_dataset = DummyDataset()
-    val_dataset = DummyDataset()
+    train_dataset = SST2IndexedDataset('train', data_dir=config['classification_data_dir'])
+    val_dataset = SST2IndexedDataset('val', data_dir=config['classification_data_dir'])
     logger.info('Train dataset size : {dataset_size}'.format(dataset_size=len(train_dataset)))
 
     logger.info('Building model...')

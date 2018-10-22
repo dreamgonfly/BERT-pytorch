@@ -177,6 +177,7 @@ class Trainer:
             self.train_metrics_at_best = train_epoch_metrics
             self.train_loss_at_best = train_epoch_loss
             self.best_checkpoint_filepath = checkpoint_filepath
+            self.best_epoch = self.epoch
 
         if self.logger:
             self.logger.info("Saved model to {}".format(checkpoint_filepath))

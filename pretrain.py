@@ -9,7 +9,7 @@ import json
 parser = ArgumentParser(description='Train Transformer')
 parser.add_argument('--config', type=str, default=None)
 
-parser.add_argument('--data_dir', type=str, default='example')
+parser.add_argument('--pretraining_data_dir', type=str, default='wiki-example')
 parser.add_argument('--config_filename', type=str, default=None)
 parser.add_argument('--checkpoint_filename', type=str, default=None)
 parser.add_argument('--log_filename', type=str, default=None)
@@ -18,7 +18,7 @@ parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_availa
 
 parser.add_argument('--dataset_limit', type=int, default=None)
 parser.add_argument('--print_every', type=int, default=1)
-parser.add_argument('--save_every', type=int, default=1)
+parser.add_argument('--save_every', type=int, default=10)
 
 parser.add_argument('--vocabulary_size', type=int, default=None)
 parser.add_argument('--max_len', type=int, default=512)

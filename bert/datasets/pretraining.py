@@ -11,7 +11,7 @@ from random import random, randint
 
 class RawCorpus:
 
-    def __init__(self, phase, data_dir='example'):
+    def __init__(self, phase, data_dir='wiki-example'):
         assert phase in ('train', 'val', 'test')
 
         data_pathname = join(DATA_DIR, data_dir, 'raw', phase, '*.txt')
@@ -30,27 +30,22 @@ class RawCorpus:
         return len(self.raw_documents)
 
     @staticmethod
-    def prepare(data_dir='example'):
-        data_pathname = join(DATA_DIR, data_dir, '*.txt')
-        data_filepaths = sorted(glob(data_pathname))
-        train_filepaths, val_test_filepaths = train_test_split(data_filepaths, test_size=0.2)
-        val_filepaths, test_filepaths = train_test_split(val_test_filepaths, test_size=0.2)
+    def prepare(data_dir='wiki-example'):
+        data_filepath = join(DATA_DIR, data_dir, 'wiki.txt')
+        with open(data_filepath) as data_file:
+            data = data_file.readlines()
+        train_data, val_test_data = train_test_split(data, test_size=0.2)
+        val_data, test_data = train_test_split(val_test_data, test_size=0.2)
 
         to_data_dir = join(DATA_DIR, data_dir, 'raw')
 
-        for phase, filepaths in [('train', train_filepaths), ('val', val_filepaths), ('test', test_filepaths)]:
+        for phase, data in [('train', train_data), ('val', val_data), ('test', test_data)]:
 
             phase_dir = join(to_data_dir, phase)
             if not exists(phase_dir):
                 makedirs(phase_dir)
 
-            raw_documents = []
-            for filepath in filepaths:
-                with open(filepath, 'r') as file:
-                    raw_document = file.read()
-                    raw_documents.append(raw_document)
-
-            for document_index, raw_document in enumerate(raw_documents):
+            for document_index, raw_document in enumerate(data):
                 filename = f'{document_index:0>4}.txt'
                 to_filepath = join(phase_dir, filename)
                 with open(to_filepath, 'w') as to_file:
@@ -58,31 +53,61 @@ class RawCorpus:
 
 
 class SegmentedCorpus:
-    def __init__(self, phase, data_dir='example'):
+    def __init__(self, phase, data_dir='wiki-example'):
 
-        source_corpus = RawCorpus(phase, data_dir)
+        data_pathname = join(DATA_DIR, data_dir, 'segmented', phase, '*.txt')
+        data_filepaths = sorted(glob(data_pathname))
 
-        self.documents = []
-        for raw_document in source_corpus:
-            document = []
-            for sentence in raw_document.split('\n'):  # Assume each line is a sentence
-                tokens = sentence.split(' ')  # Assume sentence is already tokenized
-                document.append(tokens)
-            self.documents.append(document)
+        self.segmented_documents = []
+        for data_filepath in data_filepaths:
+            segmented_document = []
+            with open(data_filepath, 'r') as file:
+                for line in file:
+                    tokens = line.strip().split()
+                    segmented_document.append(tokens)
+            self.segmented_documents.append(segmented_document)
 
     def __getitem__(self, item):
-        return self.documents[item]
+        return self.segmented_documents[item]
 
     def __iter__(self):
-        for document in self.documents:
-            yield document
+        for segmented_document in self.segmented_documents:
+            yield segmented_document
 
     def __len__(self):
-        return len(self.documents)
+        return len(self.segmented_documents)
+
+    @staticmethod
+    def preprare(sentence_piece_preprocessor, data_dir='wiki-example'):
+        for phase in ('train', 'val', 'test'):
+
+            source_corpus = RawCorpus(phase, data_dir)
+
+            phase_dir = join(DATA_DIR, data_dir, 'segmented', phase)
+            if not exists(phase_dir):
+                makedirs(phase_dir)
+
+            for document_index, raw_document in enumerate(source_corpus):
+                pieces = sentence_piece_preprocessor.EncodeAsPieces(raw_document.strip())
+                i = 0
+                sentences = []
+                sentence_length = 20  # will be changed to 256
+                while True:
+                    if len(pieces) < sentence_length*i:
+                        break
+                    sentence = pieces[sentence_length*i:sentence_length*(i+1)]
+                    sentence_text = ' '.join(sentence)
+                    sentences.append(sentence_text)
+                    i += 1
+                filename = f'{document_index:0>4}.txt'
+                to_filepath = join(phase_dir, filename)
+                document_text = '\n'.join(sentences)
+                with open(to_filepath, 'w') as to_file:
+                    to_file.write(document_text)
 
 
 class IndexedCorpus:
-    def __init__(self, phase, data_dir='example', vocabulary_size=None):
+    def __init__(self, phase, data_dir='wiki-example', vocabulary_size=None):
 
         data_pathname = join(DATA_DIR, data_dir, 'indexed', phase, '*.txt')
         data_filepaths = sorted(glob(data_pathname))
@@ -103,7 +128,7 @@ class IndexedCorpus:
         return len(self.indexed_documents)
 
     @staticmethod
-    def prepare(dictionary, data_dir='example'):
+    def prepare(dictionary, data_dir='wiki-example'):
         for phase in ('train', 'val', 'test'):
 
             source_corpus = SegmentedCorpus(phase, data_dir)
@@ -144,7 +169,7 @@ class MaskedDocument:
     def __getitem__(self, item):
         """Get a masked sentence and the corresponding target.
 
-        For example, [5,6,MASK_INDEX,8,9], [0,0,7,0,0]
+        For wiki-example, [5,6,MASK_INDEX,8,9], [0,0,7,0,0]
         """
         sentence = self.sentences[item]
 
@@ -176,7 +201,7 @@ class MaskedDocument:
 
 class MaskedCorpus:
 
-    def __init__(self, phase, data_dir='example', vocabulary_size=None):
+    def __init__(self, phase, data_dir='wiki-example', vocabulary_size=None):
         source_corpus = IndexedCorpus(phase, data_dir, vocabulary_size)
 
         self.sentences_count = 0
@@ -196,7 +221,7 @@ class MaskedCorpus:
 
 class PairedDataset:
 
-    def __init__(self, phase, data_dir='example', vocabulary_size=None):
+    def __init__(self, phase, data_dir='wiki-example', vocabulary_size=None):
         self.source_corpus = MaskedCorpus(phase, data_dir, vocabulary_size)
         self.dataset_size = self.source_corpus.sentences_count
         self.corpus_size = len(self.source_corpus)
@@ -215,7 +240,7 @@ class PairedDataset:
             random_document_index = randint(0, self.corpus_size-1)
             random_document = self.source_corpus[random_document_index]
             random_sentence_index = randint(0, len(random_document)-1)
-            B_masked_sentence, B_target_sentence = document[random_sentence_index]
+            B_masked_sentence, B_target_sentence = random_document[random_sentence_index]
             is_next = 0
 
         sequence = [CLS_INDEX] + A_masked_sentence + [SEP_INDEX] + B_masked_sentence + [SEP_INDEX]

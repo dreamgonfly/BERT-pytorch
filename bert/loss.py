@@ -34,6 +34,7 @@ class ClassificationLoss(nn.Module):
         self.loss_function = nn.CrossEntropyLoss(reduction='sum')
 
     def forward(self, classification_outputs, classification_targets):
-        loss = self.loss_function(classification_outputs, classification_targets)
+        classification_targets_tensor = convert_to_tensor(classification_targets, device=classification_outputs.device)
+        loss = self.loss_function(classification_outputs, classification_targets_tensor)
         count = len(classification_targets)
         return loss, count

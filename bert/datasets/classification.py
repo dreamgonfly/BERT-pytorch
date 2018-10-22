@@ -7,7 +7,7 @@ from os import makedirs
 class SST2Dataset:
 
     def __init__(self, phase, data_dir='SST-2'):
-        assert phase in ('train', 'val', 'test')
+        assert phase in ('train', 'val')
 
         phase = 'dev' if phase == 'val' else phase
         data_filepath = join(DATA_DIR, data_dir, phase + '.tsv')
@@ -15,7 +15,7 @@ class SST2Dataset:
         self.data = []
         with open(data_filepath) as file:
             first_line = file.readline()
-            assert first_line == 'sentence\tlabel\n'
+            assert first_line == 'sentence\tlabel\n', first_line
             for line in file:
                 text, sentiment = line.strip().split('\t')
                 self.data.append((text.strip(), int(sentiment)))
@@ -52,7 +52,7 @@ class SST2TokenizedDataset:
     @staticmethod
     def prepare(sentence_piece_preprocessor, data_dir='SST-2'):
 
-        for phase in ('train', 'val', 'test'):
+        for phase in ('train', 'val'):
 
             source_dataset = SST2Dataset(phase, data_dir)
 
@@ -82,7 +82,8 @@ class SST2IndexedDataset:
 
             for line in file:
                 indexed_text, sentiment = line.strip().split('\t')
-                self.data.append((indexed_text.split(), int(sentiment)))
+                indexed_text_indexes = [int(token) for token in indexed_text.split()]
+                self.data.append((indexed_text_indexes, int(sentiment)))
 
     def __getitem__(self, item):
         indexed_text, sentiment = self.data[item]
@@ -94,7 +95,7 @@ class SST2IndexedDataset:
 
     @staticmethod
     def prepare(dictionary, data_dir='SST-2'):
-        for phase in ('train', 'val', 'test'):
+        for phase in ('train', 'val'):
 
             source_dataset = SST2TokenizedDataset(phase, data_dir)
 
@@ -106,7 +107,8 @@ class SST2IndexedDataset:
             with open(to_data_filepath, 'w') as to_file:
                 to_file.write('sentence\tlabel\n')
                 for text, sentiment in source_dataset:
-                    indexed_text = dictionary.index_sentence(text.split())
+                    indexed_sentence = dictionary.index_sentence(text.split())
+                    indexed_sentence_text = [str(index) for index in indexed_sentence]
 
-                    line = ' '.join(indexed_text) + '\t' + str(sentiment) + '\n'
+                    line = ' '.join(indexed_sentence_text) + '\t' + str(sentiment) + '\n'
                     to_file.write(line)
