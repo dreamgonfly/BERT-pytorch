@@ -1,22 +1,30 @@
 from bert_preprocess import PAD_INDEX, MASK_INDEX, CLS_INDEX, SEP_INDEX
 
+from tqdm import tqdm
+
 from random import random, randint
 
 
 class IndexedCorpus:
-    def __init__(self, data_path, dictionary):
-
+    def __init__(self, data_path, dictionary, dataset_limit=None):
         self.indexed_documents = []
         with open(data_path) as file:
-            for document in file:
+            for document in tqdm(file):
                 indexed_document = []
                 for sentence in document.split('|'):
                     indexed_sentence = []
                     for token in sentence.strip().split():
                         indexed_token = dictionary.token_to_index(token)
                         indexed_sentence.append(indexed_token)
+                    if len(indexed_sentence) < 1:
+                        continue
                     indexed_document.append(indexed_sentence)
+                if len(indexed_document) < 2:
+                    continue
                 self.indexed_documents.append(indexed_document)
+
+                if dataset_limit is not None and len(self.indexed_documents) >= dataset_limit:
+                    break
 
     def __getitem__(self, item):
         return self.indexed_documents[item]
@@ -29,6 +37,7 @@ class MaskedDocument:
     def __init__(self, sentences, vocabulary_size):
         self.sentences = sentences
         self.vocabulary_size = vocabulary_size
+        self.THRESHOLD = 0.15
 
     def __getitem__(self, item):
         """Get a masked sentence and the corresponding target.
@@ -41,12 +50,12 @@ class MaskedDocument:
         target_sentence = []
 
         for token_index in sentence:
-            if random() < 0.15:  # we mask 15% of all tokens in each sequence at random.
-                r = random()
-                if r < 0.8:  # 80% of the time: Replace the word with the [MASK] token
+            r = random()
+            if r < self.THRESHOLD:  # we mask 15% of all tokens in each sequence at random.
+                if r < self.THRESHOLD * 0.8:  # 80% of the time: Replace the word with the [MASK] token
                     masked_sentence.append(MASK_INDEX)
                     target_sentence.append(token_index)
-                elif r < 0.9:  # 10% of the time: Replace the word with a random word
+                elif r < self.THRESHOLD * 0.9:  # 10% of the time: Replace the word with a random word
                     random_token_index = randint(5, self.vocabulary_size-1)
                     masked_sentence.append(random_token_index)
                     target_sentence.append(token_index)
@@ -65,8 +74,8 @@ class MaskedDocument:
 
 class MaskedCorpus:
 
-    def __init__(self, data_path, dictionary):
-        source_corpus = IndexedCorpus(data_path, dictionary)
+    def __init__(self, data_path, dictionary, dataset_limit=None):
+        source_corpus = IndexedCorpus(data_path, dictionary, dataset_limit=dataset_limit)
 
         self.sentences_count = 0
         self.masked_documents = []
@@ -85,8 +94,8 @@ class MaskedCorpus:
 
 class PairedDataset:
 
-    def __init__(self, data_path, dictionary):
-        self.source_corpus = MaskedCorpus(data_path, dictionary)
+    def __init__(self, data_path, dictionary, dataset_limit=None):
+        self.source_corpus = MaskedCorpus(data_path, dictionary, dataset_limit=dataset_limit)
         self.dataset_size = self.source_corpus.sentences_count
         self.corpus_size = len(self.source_corpus)
 

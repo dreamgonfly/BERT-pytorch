@@ -1,6 +1,7 @@
 from bert_train.train import pretrain, finetune
-from bert_preprocess.preprocess import preprocess_all, extract_articles_wiki, detect_sentences, split_sentences
-from bert_preprocess.preprocess import train_tokenizer, prepare_documents, split_train_val, index_documents
+from bert_preprocess.preprocess import preprocess_all
+from bert_preprocess.preprocess import extract_articles_wiki, detect_sentences, split_sentences
+from bert_preprocess.preprocess import train_tokenizer, prepare_documents, split_train_val, build_dictionary
 
 import torch
 
@@ -71,20 +72,20 @@ split_train_test_parser.add_argument('--val_path', type=str, default='val.txt')
 split_train_test_parser.add_argument('--data_dir', type=str, default=None)
 
 
-index_documents_parser = subparsers.add_parser('index-documents')
-index_documents_parser.set_defaults(function=index_documents)
-index_documents_parser.add_argument('train_path', type=str, default='train.txt')
-index_documents_parser.add_argument('--data_dir', type=str, default=None)
-index_documents_parser.add_argument('--dictionary_path', type=str, default='dictionary.txt')
+build_dictionary_parser = subparsers.add_parser('build-dictionary')
+build_dictionary_parser.set_defaults(function=build_dictionary)
+build_dictionary_parser.add_argument('train_path', type=str, default='train.txt')
+build_dictionary_parser.add_argument('--data_dir', type=str, default=None)
+build_dictionary_parser.add_argument('--dictionary_path', type=str, default='dictionary.txt')
 
 
 pretrain_parser = subparsers.add_parser('pretrain')
 pretrain_parser.set_defaults(function=pretrain)
 
 pretrain_parser.add_argument('--data_dir', type=str, default=None)
-pretrain_parser.add_argument('--train_data', type=str, default='train.txt')
-pretrain_parser.add_argument('--val_data', type=str, default='val.txt')
-pretrain_parser.add_argument('--dictionary', type=str, default='dictionary.txt')
+pretrain_parser.add_argument('--train_path', type=str, default='train.txt')
+pretrain_parser.add_argument('--val_path', type=str, default='val.txt')
+pretrain_parser.add_argument('--dictionary_path', type=str, default='dictionary.txt')
 
 pretrain_parser.add_argument('--config_output', type=str, default=None)
 pretrain_parser.add_argument('--checkpoint_output', type=str, default=None)
@@ -97,7 +98,7 @@ pretrain_parser.add_argument('--batch_size', type=int, default=64)
 pretrain_parser.add_argument('--print_every', type=int, default=1)
 pretrain_parser.add_argument('--save_every', type=int, default=10)
 
-pretrain_parser.add_argument('--vocabulary_size', type=int, default=None)
+pretrain_parser.add_argument('--vocabulary_size', type=int, default=30000)
 pretrain_parser.add_argument('--max_len', type=int, default=512)
 
 pretrain_parser.add_argument('--lr', type=float, default=0.001)

@@ -28,11 +28,11 @@ def preprocess_all(config):
     prepare_documents(config)
     print('Splitting train val data...')
     split_train_val(config)
-    print('indexing documents...')
-    index_documents(config)
+    print('Building dictionary...')
+    build_dictionary(config)
 
 
-def tokenize(text:str, token_min_len:int, token_max_len:int, lower:bool):
+def tokenize(text: str, token_min_len: int, token_max_len: int, lower: bool):
     if lower:
         text = text.lower()
     return text.split()
@@ -98,7 +98,8 @@ def prepare_documents(config):
 
     sentences_detected_path = prepend_data_dir(config['sentences_detected_path'], config['data_dir'])
     prepared_documents_path = prepend_data_dir(config['prepared_documents_path'], config['data_dir'])
-    with open(sentences_detected_path) as sentences_detected_file, open(prepared_documents_path, 'w') as prepared_documents_file:
+    with open(sentences_detected_path) as sentences_detected_file, \
+            open(prepared_documents_path, 'w') as prepared_documents_file:
         for document in tqdm(sentences_detected_file):
             prepared_sentences = []
             pieces = []
@@ -113,11 +114,14 @@ def prepare_documents(config):
                     else:
                         pieces.extend(sentence_pieces)
                 else:
-                    prepared_sentences.append(' '.join(pieces))
+                    if len(pieces) > 0:
+                        prepared_sentences.append(' '.join(pieces))
                     for i in range(0, len(sentence_pieces), 254):
                         sentence_pieces_segment = sentence_pieces[i:i+254]
                         prepared_sentences.append(' '.join(sentence_pieces_segment))
                     pieces = []
+            if len(prepared_sentences) < 2:
+                continue
             output_line = '|'.join(prepared_sentences) + '\n'
             prepared_documents_file.write(output_line)
 
@@ -139,7 +143,7 @@ def split_train_val(config):
             val_file.write(line)
 
 
-def index_documents(config):
+def build_dictionary(config):
 
     if config['data_dir'] is not None:
         data_path = join(config['data_dir'], config['train_path'])
