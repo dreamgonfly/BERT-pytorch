@@ -1,10 +1,11 @@
 from bert_preprocess import PAD_INDEX
 
 
-def pretraining_collate_fn(batch):
+def pretraining_collate_function(batch):
 
-    lengths = [len(sequence) for (sequence, _), _ in batch]
-    max_length = max(lengths)
+    targets = [target for _, (target, is_next) in batch]
+    longest_target = max(targets, key=lambda target: len(target))
+    max_length = len(longest_target)
 
     padded_sequences = []
     padded_segments = []
@@ -23,10 +24,16 @@ def pretraining_collate_fn(batch):
         padded_targets.append(padded_target)
         is_nexts.append(is_next)
 
-    return (padded_sequences, padded_segments), (padded_targets, is_nexts)
+    count = 0
+    for target in targets:
+        for token in target:
+            if token != PAD_INDEX:
+                count += 1
+
+    return (padded_sequences, padded_segments), (padded_targets, is_nexts), count
 
 
-def classification_collate_fn(batch):
+def classification_collate_function(batch):
 
     lengths = [len(sequence) for (sequence, _), _ in batch]
     max_length = max(lengths)
@@ -45,4 +52,6 @@ def classification_collate_fn(batch):
         padded_segments.append(padded_segment)
         labels.append(label)
 
-    return (padded_sequences, padded_segments), labels
+    count = len(labels)
+
+    return (padded_sequences, padded_segments), labels, count

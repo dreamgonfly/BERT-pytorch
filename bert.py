@@ -93,7 +93,7 @@ pretrain_parser.add_argument('--log', type=str, default=None)
 
 pretrain_parser.add_argument('--dataset_limit', type=int, default=None)
 pretrain_parser.add_argument('--epochs', type=int, default=100)
-pretrain_parser.add_argument('--batch_size', type=int, default=64)
+pretrain_parser.add_argument('--batch_size', type=int, default=16)
 
 pretrain_parser.add_argument('--print_every', type=int, default=1)
 pretrain_parser.add_argument('--save_every', type=int, default=10)
@@ -111,7 +111,6 @@ pretrain_parser.add_argument('--d_ff', type=int, default=128)
 pretrain_parser.add_argument('--dropout_prob', type=float, default=0.1)
 
 pretrain_parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu')
-pretrain_parser.add_argument('--device_ids', type=int, nargs='+', default=[0])
 
 
 finetune_parser = subparsers.add_parser('finetune')
@@ -130,12 +129,12 @@ finetune_parser.add_argument('--log', type=str, default=None)
 
 finetune_parser.add_argument('--dataset_limit', type=int, default=None)
 finetune_parser.add_argument('--epochs', type=int, default=100)
-finetune_parser.add_argument('--batch_size', type=int, default=64)
+finetune_parser.add_argument('--batch_size', type=int, default=16)
 
 finetune_parser.add_argument('--print_every', type=int, default=1)
 finetune_parser.add_argument('--save_every', type=int, default=10)
 
-finetune_parser.add_argument('--vocabulary_size', type=int, default=None)
+finetune_parser.add_argument('--vocabulary_size', type=int, default=30000)
 finetune_parser.add_argument('--max_len', type=int, default=512)
 
 finetune_parser.add_argument('--lr', type=float, default=0.001)

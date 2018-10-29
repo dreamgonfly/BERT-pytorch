@@ -1,13 +1,13 @@
 from bert_preprocess.dictionary import IndexDictionary
 
 from .models.bert import build_model, FineTuneModel
-from .loss import MLMNSPLoss, ClassificationLoss
-from .metrics import MLMAccuracyMetric, NSPAccuracyMetric, ClassificationAccracyMetric
+from .loss_models import MLMNSPLossModel, ClassificationLossModel
+from .metrics import mlm_accuracy, nsp_accuracy, classification_accuracy
 from .datasets.pretraining import PairedDataset
 from .datasets.classification import SST2IndexedDataset
 from .trainer import Trainer
 from .utils.log import get_logger, make_run_name, make_log_filepath
-from .utils.collate import pretraining_collate_fn, classification_collate_fn
+from .utils.collate import pretraining_collate_function, classification_collate_function
 
 import torch
 from torch.nn import DataParallel
@@ -26,13 +26,13 @@ def pretrain(config):
 
     data_dir = config['data_dir']
     if data_dir is not None:
-        config['train_data_path'] = join(data_dir, config['train_data'])
-        config['val_data_path'] = join(data_dir, config['val_data'])
-        config['dictionary_path'] = join(data_dir, config['dictionary'])
+        train_path = join(data_dir, config['train_path'])
+        val_path = join(data_dir, config['val_path'])
+        dictionary_path = join(data_dir, config['dictionary_path'])
     else:
-        config['train_data_path'] = config['train_data']
-        config['val_data_path'] = config['val_data']
-        config['dictionary_path'] = config['dictionary']
+        train_path = config['train_path']
+        val_path = config['val_path']
+        dictionary_path = config['dictionary_path']
 
     if 'run_name' not in config:
         config['run_name'] = make_run_name(config, phase='pretrain')
@@ -44,45 +44,46 @@ def pretrain(config):
     logger.info(config)
 
     logger.info('Constructing dictionaries...')
-    dictionary = IndexDictionary.load(dictionary_path=config['dictionary_path'],
+    dictionary = IndexDictionary.load(dictionary_path=dictionary_path,
                                       vocabulary_size=config['vocabulary_size'])
     vocabulary_size = len(dictionary)
     logger.info(f'dictionary vocabulary : {vocabulary_size} tokens')
 
     logger.info('Loading datasets...')
-    train_dataset = PairedDataset(data_path=config['train_data_path'], dictionary=dictionary)
-    val_dataset = PairedDataset(data_path=config['val_data_path'], dictionary=dictionary)
+    train_dataset = PairedDataset(data_path=train_path, dictionary=dictionary, dataset_limit=config['dataset_limit'])
+    val_dataset = PairedDataset(data_path=val_path, dictionary=dictionary, dataset_limit=config['dataset_limit'])
     logger.info('Train dataset size : {dataset_size}'.format(dataset_size=len(train_dataset)))
 
     logger.info('Building model...')
     model = build_model(config, vocabulary_size)
-    model = DataParallel(model, device_ids=config['device_ids'])
 
     logger.info(model)
     logger.info('{parameters_count} parameters'.format(
         parameters_count=sum([p.nelement() for p in model.parameters()])))
 
-    loss_function = MLMNSPLoss()
-    metric_functions = [MLMAccuracyMetric(), NSPAccuracyMetric()]
+    loss_model = MLMNSPLossModel(model)
+    if torch.cuda.device_count() > 1:
+        loss_model = DataParallel(loss_model, output_device=1)
+
+    metric_functions = [mlm_accuracy, nsp_accuracy]
 
     train_dataloader = DataLoader(
         train_dataset,
         batch_size=config['batch_size'],
-        collate_fn=pretraining_collate_fn)
+        collate_fn=pretraining_collate_function)
 
     val_dataloader = DataLoader(
         val_dataset,
         batch_size=config['batch_size'],
-        collate_fn=pretraining_collate_fn)
+        collate_fn=pretraining_collate_function)
 
     optimizer = Adam(model.parameters(), lr=config['lr'])
 
     logger.info('Start training...')
     trainer = Trainer(
-        model=model,
+        loss_model=loss_model,
         train_dataloader=train_dataloader,
         val_dataloader=val_dataloader,
-        loss_function=loss_function,
         metric_functions=metric_functions,
         optimizer=optimizer,
         clip_grads=config['clip_grads'],
@@ -104,11 +105,11 @@ def finetune(config):
 
     data_dir = config['data_dir']
     if data_dir is not None:
-        config['train_data_path'] = join(data_dir, config['train_data'])
-        config['val_data_path'] = join(data_dir, config['val_data'])
+        train_path = join(data_dir, config['train_data'])
+        val_path = join(data_dir, config['val_data'])
     else:
-        config['train_data_path'] = config['train_data']
-        config['val_data_path'] = config['val_data']
+        train_path = config['train_data']
+        val_path = config['val_data']
     config['dictionary_path'] = config['dictionary']
 
     if 'run_name' not in config:
@@ -127,8 +128,8 @@ def finetune(config):
     logger.info(f'dictionary vocabulary : {vocabulary_size} tokens')
 
     logger.info('Loading datasets...')
-    train_dataset = SST2IndexedDataset(data_path=config['train_data_path'], dictionary=dictionary)
-    val_dataset = SST2IndexedDataset(data_path=config['val_data_path'], dictionary=dictionary)
+    train_dataset = SST2IndexedDataset(data_path=train_path, dictionary=dictionary)
+    val_dataset = SST2IndexedDataset(data_path=val_path, dictionary=dictionary)
     logger.info('Train dataset size : {dataset_size}'.format(dataset_size=len(train_dataset)))
 
     logger.info('Building model...')
@@ -141,27 +142,26 @@ def finetune(config):
     logger.info('{parameters_count} parameters'.format(
         parameters_count=sum([p.nelement() for p in model.parameters()])))
 
-    loss_function = ClassificationLoss()
-    metric_functions = [ClassificationAccracyMetric()]
+    loss_model = ClassificationLossModel(model)
+    metric_functions = [classification_accuracy]
 
     train_dataloader = DataLoader(
         train_dataset,
         batch_size=config['batch_size'],
-        collate_fn=classification_collate_fn)
+        collate_fn=classification_collate_function)
 
     val_dataloader = DataLoader(
         val_dataset,
         batch_size=config['batch_size'],
-        collate_fn=classification_collate_fn)
+        collate_fn=classification_collate_function)
 
     optimizer = Adam(model.parameters(), lr=config['lr'])
 
     logger.info('Start training...')
     trainer = Trainer(
-        model=model,
+        loss_model=loss_model,
         train_dataloader=train_dataloader,
         val_dataloader=val_dataloader,
-        loss_function=loss_function,
         metric_functions=metric_functions,
         optimizer=optimizer,
         clip_grads=config['clip_grads'],

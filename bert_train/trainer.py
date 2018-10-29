@@ -1,5 +1,5 @@
 from . import CHECKPOINT_DIR
-from .utils.convert import convert_to_tensor
+from .utils.convert import convert_to_tensor, convert_to_array
 
 import torch
 from tqdm import tqdm
@@ -12,21 +12,20 @@ import json
 
 class Trainer:
 
-    def __init__(self, model,
+    def __init__(self, loss_model,
                  train_dataloader, val_dataloader,
-                 loss_function, metric_functions, optimizer,
-                 clip_grads,
+                 metric_functions,
+                 optimizer, clip_grads,
                  logger, run_name,
                  config_output, checkpoint_output,
                  config):
 
-        self.device = torch.device(config['device'])
+        self.device = config['device']
 
-        self.model = model.to(self.device)
+        self.loss_model = loss_model.to(self.device)
         self.train_dataloader = train_dataloader
         self.val_dataloader = val_dataloader
 
-        self.loss_function = loss_function.to(self.device)
         self.metric_functions = metric_functions
         self.optimizer = optimizer
         self.clip_grads = clip_grads
@@ -71,42 +70,38 @@ class Trainer:
         )
 
     def run_epoch(self, dataloader, mode='train'):
-        batch_losses = []
-        batch_counts = []
-        batch_metrics = []
-        batch_metric_counts = []
-        for inputs, targets in tqdm(dataloader):
+
+        epoch_loss = 0
+        epoch_count = 0
+        epoch_metrics = [0 for _ in range(len(self.metric_functions))]
+
+        for inputs, targets, batch_count in tqdm(dataloader):
             inputs = convert_to_tensor(inputs, self.device)
+            targets = convert_to_tensor(targets, self.device)
 
-            outputs = self.model(inputs)
+            predictions, batch_losses = self.loss_model(inputs, targets)
+            predictions = convert_to_array(predictions)
+            targets = convert_to_array(targets)
 
-            batch_loss, batch_count = self.loss_function(outputs, targets)
+            batch_loss = batch_losses.mean()
 
             if mode == 'train':
                 self.optimizer.zero_grad()
                 batch_loss.backward()
                 if self.clip_grads:
-                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1)
+                    torch.nn.utils.clip_grad_norm_(self.loss_model.parameters(), 1)
                 self.optimizer.step()
 
-            batch_losses.append(batch_loss.item())
-            batch_counts.append(batch_count)
+            epoch_loss = (epoch_loss * epoch_count + batch_loss.item() * batch_count) / (epoch_count + batch_count)
 
-            metrics, metric_counts = [], []
-            for metric_function in self.metric_functions:
-                metric, metric_count = metric_function(outputs, targets)
-                metrics.append(metric)
-                metric_counts.append(metric_count)
+            batch_metrics = [metric_function(predictions, targets) for metric_function in self.metric_functions]
+            epoch_metrics = [(epoch_metric * epoch_count + batch_metric * batch_count) / (epoch_count + batch_count)
+                             for epoch_metric, batch_metric in zip(epoch_metrics, batch_metrics)]
 
-            batch_metrics.append(metrics)
-            batch_metric_counts.append(metric_counts)
+            epoch_count += batch_count
 
             if self.epoch == 0:  # for testing
                 return float('inf'), [float('inf')]
-
-        epoch_loss = sum(batch_losses) / sum(batch_counts)
-        epoch_metrics = [(sum(batch_metric) / sum(batch_metric_count)) if sum(batch_metric_count) != 0 else 0.0
-                         for batch_metric, batch_metric_count in zip(zip(*batch_metrics), zip(*batch_metric_counts))]
 
         return epoch_loss, epoch_metrics
 
@@ -115,13 +110,13 @@ class Trainer:
         for epoch in range(self.epoch, epochs + 1):
             self.epoch = epoch
 
-            self.model.train()
+            self.loss_model.train()
 
             epoch_start_time = datetime.now()
             train_epoch_loss, train_epoch_metrics = self.run_epoch(self.train_dataloader, mode='train')
             epoch_end_time = datetime.now()
 
-            self.model.eval()
+            self.loss_model.eval()
 
             val_epoch_loss, val_epoch_metrics = self.run_epoch(self.val_dataloader, mode='val')
 
@@ -141,7 +136,7 @@ class Trainer:
 
                 self.logger.info(log_message)
 
-            if epoch % self.save_every == 0:
+            if epoch % self.save_every == 0 and epoch > 0:
                 self._save_model(epoch, train_epoch_loss, val_epoch_loss, train_epoch_metrics, val_epoch_metrics)
 
     def _save_model(self, epoch, train_epoch_loss, val_epoch_loss, train_epoch_metrics, val_epoch_metrics):
@@ -166,9 +161,11 @@ class Trainer:
             'checkpoint': checkpoint_output_path,
         }
 
-        if self.epoch > 0:
-            torch.save(self.model.state_dict(), checkpoint_output_path)
-            self.history.append(save_state)
+        if getattr(self.loss_model, 'module'):  # DataParallel
+            torch.save(self.loss_model.module.state_dict(), checkpoint_output_path)
+        else:
+            torch.save(self.loss_model.state_dict(), checkpoint_output_path)
+        self.history.append(save_state)
 
         representative_val_metric = val_epoch_metrics[0]
         if self.best_val_metric is None or self.best_val_metric > representative_val_metric:
@@ -180,7 +177,7 @@ class Trainer:
             self.best_checkpoint_output_path = checkpoint_output_path
             self.best_epoch = self.epoch
 
-        if self.epoch > 0 and self.logger:
+        if self.logger:
             self.logger.info("Saved model to {}".format(checkpoint_output_path))
             self.logger.info("Current best model is {}".format(self.best_checkpoint_output_path))
 
