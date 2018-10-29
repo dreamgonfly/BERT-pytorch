@@ -110,6 +110,7 @@ pretrain_parser.add_argument('--d_ff', type=int, default=128)
 pretrain_parser.add_argument('--dropout_prob', type=float, default=0.1)
 
 pretrain_parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu')
+pretrain_parser.add_argument('--device_ids', type=int, nargs='+', default=[0])
 
 
 finetune_parser = subparsers.add_parser('finetune')

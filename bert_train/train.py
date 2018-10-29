@@ -10,6 +10,7 @@ from .utils.log import get_logger, make_run_name, make_log_filepath
 from .utils.collate import pretraining_collate_fn, classification_collate_fn
 
 import torch
+from torch.nn import DataParallel
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 
@@ -55,6 +56,8 @@ def pretrain(config):
 
     logger.info('Building model...')
     model = build_model(config, vocabulary_size)
+    model = DataParallel(model, device_ids=config['device_ids'])
+
     logger.info(model)
     logger.info('{parameters_count} parameters'.format(
         parameters_count=sum([p.nelement() for p in model.parameters()])))

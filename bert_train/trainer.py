@@ -180,7 +180,7 @@ class Trainer:
             self.best_checkpoint_output_path = checkpoint_output_path
             self.best_epoch = self.epoch
 
-        if self.logger:
+        if self.epoch > 0 and self.logger:
             self.logger.info("Saved model to {}".format(checkpoint_output_path))
             self.logger.info("Current best model is {}".format(self.best_checkpoint_output_path))
 
