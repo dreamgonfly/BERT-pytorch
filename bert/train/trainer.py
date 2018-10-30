@@ -1,26 +1,33 @@
-from . import CHECKPOINT_DIR
 from .utils.convert import convert_to_tensor, convert_to_array
 
 import torch
 from tqdm import tqdm
 
-from os.path import join, exists
-from os import makedirs
+from os.path import join
 from datetime import datetime
-import json
+
+SAVE_FORMAT = 'epoch={epoch:0>3}-val_loss={val_loss:<.3}-val_metrics={val_metrics}.pth'
+
+LOG_FORMAT = (
+    "Epoch: {epoch:>3} "
+    "Progress: {progress:<.1%} "
+    "Elapsed: {elapsed} "
+    "Examples/second: {per_second:<.1} "
+    "Train Loss: {train_loss:<.6} "
+    "Val Loss: {val_loss:<.6} "
+    "Train Metrics: {train_metrics} "
+    "Val Metrics: {val_metrics} "
+    "Learning rate: {current_lr:<.4} "
+)
 
 
 class Trainer:
 
-    def __init__(self, loss_model,
-                 train_dataloader, val_dataloader,
-                 metric_functions,
-                 optimizer, clip_grads,
-                 logger, run_name,
-                 config_output, checkpoint_output,
-                 config):
+    def __init__(self, loss_model, train_dataloader, val_dataloader,
+                 metric_functions, device, optimizer, clip_grads,
+                 logger, checkpoint_dir, print_every, save_every):
 
-        self.device = config['device']
+        self.device = device
 
         self.loss_model = loss_model.to(self.device)
         self.train_dataloader = train_dataloader
@@ -31,20 +38,10 @@ class Trainer:
         self.clip_grads = clip_grads
 
         self.logger = logger
-        self.checkpoint_dir = join(CHECKPOINT_DIR, run_name)
-        if not exists(self.checkpoint_dir):
-            makedirs(self.checkpoint_dir)
+        self.checkpoint_dir = checkpoint_dir
 
-        if config_output is None:
-            config_output_path = join(self.checkpoint_dir, 'config.json')
-        else:
-            config_output_path = config_output
-        with open(config_output_path, 'w') as config_file:
-            del config['function']
-            json.dump(config, config_file)
-
-        self.print_every = config['print_every']
-        self.save_every = config['save_every']
+        self.print_every = print_every
+        self.save_every = save_every
 
         self.epoch = 0
         self.history = []
@@ -53,21 +50,6 @@ class Trainer:
 
         self.best_val_metric = None
         self.best_checkpoint_output_path = None
-
-        self.checkpoint_output = checkpoint_output
-        self.save_format = 'epoch={epoch:0>3}-val_loss={val_loss:<.3}-val_metrics={val_metrics}.pth'
-
-        self.log_format = (
-            "Epoch: {epoch:>3} "
-            "Progress: {progress:<.1%} "
-            "Elapsed: {elapsed} "
-            "Examples/second: {per_second:<.1} "
-            "Train Loss: {train_loss:<.6} "
-            "Val Loss: {val_loss:<.6} "
-            "Train Metrics: {train_metrics} "
-            "Val Metrics: {val_metrics} "
-            "Learning rate: {current_lr:<.4} "
-        )
 
     def run_epoch(self, dataloader, mode='train'):
 
@@ -123,16 +105,16 @@ class Trainer:
             if epoch % self.print_every == 0 and self.logger:
                 per_second = len(self.train_dataloader.dataset) / ((epoch_end_time - epoch_start_time).seconds + 1)
                 current_lr = self.optimizer.param_groups[0]['lr']
-                log_message = self.log_format.format(epoch=epoch,
-                                                     progress=epoch / epochs,
-                                                     per_second=per_second,
-                                                     train_loss=train_epoch_loss,
-                                                     val_loss=val_epoch_loss,
-                                                     train_metrics=[round(metric, 4) for metric in train_epoch_metrics],
-                                                     val_metrics=[round(metric, 4) for metric in val_epoch_metrics],
-                                                     current_lr=current_lr,
-                                                     elapsed=self._elapsed_time()
-                                                     )
+                log_message = LOG_FORMAT.format(epoch=epoch,
+                                                progress=epoch / epochs,
+                                                per_second=per_second,
+                                                train_loss=train_epoch_loss,
+                                                val_loss=val_epoch_loss,
+                                                train_metrics=[round(metric, 4) for metric in train_epoch_metrics],
+                                                val_metrics=[round(metric, 4) for metric in val_epoch_metrics],
+                                                current_lr=current_lr,
+                                                elapsed=self._elapsed_time()
+                                                )
 
                 self.logger.info(log_message)
 
@@ -141,16 +123,13 @@ class Trainer:
 
     def _save_model(self, epoch, train_epoch_loss, val_epoch_loss, train_epoch_metrics, val_epoch_metrics):
 
-        default_checkpoint_output = self.save_format.format(
+        checkpoint_name = SAVE_FORMAT.format(
             epoch=epoch,
             val_loss=val_epoch_loss,
             val_metrics='-'.join(['{:<.3}'.format(v) for v in val_epoch_metrics])
         )
 
-        if self.checkpoint_output is None:
-            checkpoint_output_path = join(self.checkpoint_dir, default_checkpoint_output)
-        else:
-            checkpoint_output_path = self.checkpoint_output
+        checkpoint_output_path = join(self.checkpoint_dir, checkpoint_name)
 
         save_state = {
             'epoch': epoch,
@@ -160,13 +139,15 @@ class Trainer:
             'val_metrics': val_epoch_metrics,
             'checkpoint': checkpoint_output_path,
         }
-
-        if getattr(self.loss_model, 'module'):  # DataParallel
-            torch.save(self.loss_model.module.state_dict(), checkpoint_output_path)
-        else:
-            torch.save(self.loss_model.state_dict(), checkpoint_output_path)
         if epoch > 0:
             self.history.append(save_state)
+
+        if hasattr(self.loss_model, 'module'):  # DataParallel
+            save_state['state_dict'] = self.loss_model.module.state_dict()
+        else:
+            save_state['state_dict'] = self.loss_model.state_dict()
+
+        torch.save(save_state, checkpoint_output_path)
 
         representative_val_metric = val_epoch_metrics[0]
         if self.best_val_metric is None or self.best_val_metric > representative_val_metric:

@@ -5,24 +5,24 @@ from ..utils.pad import pad_masking
 from torch import nn
 
 
-def build_model(config, vocabulary_size):
-    token_embedding = nn.Embedding(num_embeddings=vocabulary_size, embedding_dim=config['hidden_size'])
-    positional_embedding = PositionalEmbedding(max_len=config['max_len'], hidden_size=config['hidden_size'])
-    segment_embedding = SegmentEmbedding(hidden_size=config['hidden_size'])
+def build_model(layers_count, hidden_size, heads_count, d_ff, dropout_prob, max_len, vocabulary_size):
+    token_embedding = nn.Embedding(num_embeddings=vocabulary_size, embedding_dim=hidden_size)
+    positional_embedding = PositionalEmbedding(max_len=max_len, hidden_size=hidden_size)
+    segment_embedding = SegmentEmbedding(hidden_size=hidden_size)
 
     encoder = TransformerEncoder(
-        layers_count=config['layers_count'],
-        d_model=config['hidden_size'],
-        heads_count=config['heads_count'],
-        d_ff=config['d_ff'],
-        dropout_prob=config['dropout_prob'])
+        layers_count=layers_count,
+        d_model=hidden_size,
+        heads_count=heads_count,
+        d_ff=d_ff,
+        dropout_prob=dropout_prob)
 
     bert = BERT(
         encoder=encoder,
         token_embedding=token_embedding,
         positional_embedding=positional_embedding,
         segment_embedding=segment_embedding,
-        hidden_size=config['hidden_size'],
+        hidden_size=hidden_size,
         vocabulary_size=vocabulary_size)
 
     return bert
@@ -30,12 +30,12 @@ def build_model(config, vocabulary_size):
 
 class FineTuneModel(nn.Module):
 
-    def __init__(self, pretrained_model, num_classes, config):
+    def __init__(self, pretrained_model, hidden_size, num_classes):
         super(FineTuneModel, self).__init__()
 
         self.pretrained_model = pretrained_model
 
-        new_classification_layer = nn.Linear(config['hidden_size'], num_classes)
+        new_classification_layer = nn.Linear(hidden_size, num_classes)
         self.pretrained_model.classification_layer = new_classification_layer
 
     def forward(self, inputs):

@@ -9,39 +9,48 @@ from nltk.tokenize import sent_tokenize
 import sentencepiece as spm
 
 import re
-from os.path import join
 
 NUMBERS = re.compile(r'\d+')
 TOKENIZATION = re.compile(r'(\w+)')
 
 
-def preprocess_all(config):
+def preprocess_all(data_dir, wiki_raw_path, raw_documents_path, sentences_detected_path, spm_input_path,
+                   spm_model_prefix, word_piece_vocab_size, prepared_documents_path, train_path, val_path,
+                   dictionary_path, **_):
+
+    wiki_raw_path = prepend_data_dir(wiki_raw_path, data_dir)
+    raw_documents_path = prepend_data_dir(raw_documents_path, data_dir)
+    sentences_detected_path = prepend_data_dir(sentences_detected_path, data_dir)
+    spm_input_path = prepend_data_dir(spm_input_path, data_dir)
+    spm_model_prefix = prepend_data_dir(spm_model_prefix, data_dir)
+    prepared_documents_path = prepend_data_dir(prepared_documents_path, data_dir)
+    train_path = prepend_data_dir(train_path, data_dir)
+    val_path = prepend_data_dir(val_path, data_dir)
+    dictionary_path = prepend_data_dir(dictionary_path, data_dir)
+
     print('Extracting articles...')
-    extract_articles_wiki(config)
+    extract_articles_wiki(wiki_raw_path, raw_documents_path)
     print('Detecting sentences...')
-    detect_sentences(config)
+    detect_sentences(raw_documents_path, sentences_detected_path)
     print('Splitting sentences...')
-    split_sentences(config)
+    split_sentences(sentences_detected_path, spm_input_path)
     print('Training tokenizer...')
-    train_tokenizer(config)
+    train_tokenizer(spm_input_path, spm_model_prefix, word_piece_vocab_size)
     print('Preparing documents...')
-    prepare_documents(config)
+    prepare_documents(spm_model_prefix, sentences_detected_path, prepared_documents_path)
     print('Splitting train val data...')
-    split_train_val(config)
+    split_train_val(prepared_documents_path, train_path, val_path)
     print('Building dictionary...')
-    build_dictionary(config)
+    build_dictionary(train_path, dictionary_path)
 
 
-def tokenize(text: str, token_min_len: int, token_max_len: int, lower: bool):
+def tokenize(text: str, lower: bool, **_):  # token_min_len: int, token_max_len: int,
     if lower:
         text = text.lower()
     return text.split()
 
 
-def extract_articles_wiki(config):
-    wiki_raw_path = prepend_data_dir(config['wiki_raw_path'], config['data_dir'])
-    raw_documents_path = prepend_data_dir(config['raw_documents_path'], config['data_dir'])
-
+def extract_articles_wiki(wiki_raw_path, raw_documents_path, **_):
     wiki_corpus = WikiCorpus(wiki_raw_path, lemmatize=False, dictionary={}, tokenizer_func=tokenize, lower=False)
 
     with open(raw_documents_path, 'w') as raw_documents_file:
@@ -50,10 +59,7 @@ def extract_articles_wiki(config):
             raw_documents_file.write(document + '\n')
 
 
-def detect_sentences(config):
-    raw_documents_path = prepend_data_dir(config['raw_documents_path'], config['data_dir'])
-    sentences_detected_path = prepend_data_dir(config['sentences_detected_path'], config['data_dir'])
-
+def detect_sentences(raw_documents_path, sentences_detected_path, **_):
     with open(raw_documents_path) as raw_documents_file, open(sentences_detected_path, 'w') as sentences_detected_file:
         for line in tqdm(raw_documents_file):
             sentences = sent_tokenize(line.strip())
@@ -70,10 +76,7 @@ def detect_sentences(config):
             sentences_detected_file.write(output_line)
 
 
-def split_sentences(config):
-    sentences_detected_path = prepend_data_dir(config['sentences_detected_path'], config['data_dir'])
-    spm_input_path = prepend_data_dir(config['spm_input_path'], config['data_dir'])
-
+def split_sentences(sentences_detected_path, spm_input_path, **_):
     with open(sentences_detected_path) as sentences_detected_file, open(spm_input_path, 'w') as spm_input_file:
         for line in tqdm(sentences_detected_file):
             for sentence in line.strip().split('|'):
@@ -83,21 +86,16 @@ def split_sentences(config):
                     spm_input_file.write(' '.join(sentence_segment) + '\n')
 
 
-def train_tokenizer(config):
-    spm_input_path = prepend_data_dir(config['spm_input_path'], config['data_dir'])
-    spm_model_prefix = prepend_data_dir(config['spm_model_prefix'], config['data_dir'])
-    word_piece_vocab_size = config['word_piece_vocab_size']
+def train_tokenizer(spm_input_path, spm_model_prefix, word_piece_vocab_size, **_):
     spm.SentencePieceTrainer.Train(f'--input={spm_input_path} --model_prefix={spm_model_prefix} '
                                    f'--vocab_size={word_piece_vocab_size} --hard_vocab_limit=false')
 
 
-def prepare_documents(config):
-    spm_model = prepend_data_dir(config['spm_model_prefix'] + '.model', config['data_dir'])
+def prepare_documents(spm_model_prefix, sentences_detected_path, prepared_documents_path, **_):
+    spm_model = spm_model_prefix + '.model'
     sp_preprocessor = spm.SentencePieceProcessor()
     sp_preprocessor.Load(spm_model)
 
-    sentences_detected_path = prepend_data_dir(config['sentences_detected_path'], config['data_dir'])
-    prepared_documents_path = prepend_data_dir(config['prepared_documents_path'], config['data_dir'])
     with open(sentences_detected_path) as sentences_detected_file, \
             open(prepared_documents_path, 'w') as prepared_documents_file:
         for document in tqdm(sentences_detected_file):
@@ -126,11 +124,7 @@ def prepare_documents(config):
             prepared_documents_file.write(output_line)
 
 
-def split_train_val(config):
-    prepared_documents_path = prepend_data_dir(config['prepared_documents_path'], config['data_dir'])
-    train_path = prepend_data_dir(config['train_path'], config['data_dir'])
-    val_path = prepend_data_dir(config['val_path'], config['data_dir'])
-
+def split_train_val(prepared_documents_path, train_path, val_path, **_):
     with open(prepared_documents_path) as prepared_documents_file:
         documents = prepared_documents_file.readlines()
 
@@ -143,14 +137,7 @@ def split_train_val(config):
             val_file.write(line)
 
 
-def build_dictionary(config):
-
-    if config['data_dir'] is not None:
-        data_path = join(config['data_dir'], config['train_path'])
-        dictionary_path = join(config['data_dir'], config['dictionary_path'])
-    else:
-        data_path = config['train_path']
-        dictionary_path = config['dictionary_path']
+def build_dictionary(train_path, dictionary_path, **_):
 
     def token_generator(data_path):
         with open(data_path) as file:
@@ -160,6 +147,6 @@ def build_dictionary(config):
                         yield token
 
     dictionary = IndexDictionary()
-    dictionary.build_vocabulary(token_generator(data_path))
+    dictionary.build_vocabulary(token_generator(train_path))
     dictionary.save(dictionary_path)
     return dictionary

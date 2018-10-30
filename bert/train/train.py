@@ -1,12 +1,11 @@
 from bert.preprocess.dictionary import IndexDictionary
-
 from .model.bert import build_model, FineTuneModel
 from .loss_models import MLMNSPLossModel, ClassificationLossModel
 from .metrics import mlm_accuracy, nsp_accuracy, classification_accuracy
 from .datasets.pretraining import PairedDataset
 from .datasets.classification import SST2IndexedDataset
 from .trainer import Trainer
-from .utils.log import get_logger, make_run_name, make_log_filepath
+from .utils.log import make_run_name, make_logger, make_checkpoint_dir
 from .utils.collate import pretraining_collate_function, classification_collate_function
 from .optimizers import NoamOptimizer
 
@@ -20,43 +19,47 @@ import numpy as np
 from os.path import join
 
 
-def pretrain(config):
+RUN_NAME_FORMAT = (
+    "BERT-"
+    "{phase}-"
+    "layers_count={layers_count}-"
+    "hidden_size={hidden_size}-"
+    "heads_count={heads_count}-"
+    "{timestamp}"
+)
+
+
+def pretrain(data_dir, train_path, val_path, dictionary_path,
+             dataset_limit, vocabulary_size, batch_size, max_len, epochs, clip_grads, device,
+             layers_count, hidden_size, heads_count, d_ff, dropout_prob,
+             log_output, checkpoint_dir, print_every, save_every, config, run_name=None, **_):
+
     random.seed(0)
     np.random.seed(0)
     torch.manual_seed(0)
 
-    data_dir = config['data_dir']
-    if data_dir is not None:
-        train_path = join(data_dir, config['train_path'])
-        val_path = join(data_dir, config['val_path'])
-        dictionary_path = join(data_dir, config['dictionary_path'])
-    else:
-        train_path = config['train_path']
-        val_path = config['val_path']
-        dictionary_path = config['dictionary_path']
+    train_path = train_path if data_dir is None else join(data_dir, train_path)
+    val_path = val_path if data_dir is None else join(data_dir, val_path)
+    dictionary_path = dictionary_path if data_dir is None else join(data_dir, dictionary_path)
 
-    if 'run_name' not in config:
-        config['run_name'] = make_run_name(config, phase='pretrain')
-    if 'log_filepath' not in config:
-        config['log_filepath'] = make_log_filepath(config)
-
-    logger = get_logger(config['run_name'], config['log_filepath'])
-    logger.info('Run name : {run_name}'.format(run_name=config['run_name']))
+    run_name = run_name if run_name is not None else make_run_name(RUN_NAME_FORMAT, phase='pretrain', config=config)
+    logger = make_logger(run_name, log_output)
+    logger.info('Run name : {run_name}'.format(run_name=run_name))
     logger.info(config)
 
     logger.info('Constructing dictionaries...')
     dictionary = IndexDictionary.load(dictionary_path=dictionary_path,
-                                      vocabulary_size=config['vocabulary_size'])
+                                      vocabulary_size=vocabulary_size)
     vocabulary_size = len(dictionary)
     logger.info(f'dictionary vocabulary : {vocabulary_size} tokens')
 
     logger.info('Loading datasets...')
-    train_dataset = PairedDataset(data_path=train_path, dictionary=dictionary, dataset_limit=config['dataset_limit'])
-    val_dataset = PairedDataset(data_path=val_path, dictionary=dictionary, dataset_limit=config['dataset_limit'])
+    train_dataset = PairedDataset(data_path=train_path, dictionary=dictionary, dataset_limit=dataset_limit)
+    val_dataset = PairedDataset(data_path=val_path, dictionary=dictionary, dataset_limit=dataset_limit)
     logger.info('Train dataset size : {dataset_size}'.format(dataset_size=len(train_dataset)))
 
     logger.info('Building model...')
-    model = build_model(config, vocabulary_size)
+    model = build_model(layers_count, hidden_size, heads_count, d_ff, dropout_prob, max_len, vocabulary_size)
 
     logger.info(model)
     logger.info('{parameters_count} parameters'.format(
@@ -70,16 +73,18 @@ def pretrain(config):
 
     train_dataloader = DataLoader(
         train_dataset,
-        batch_size=config['batch_size'],
+        batch_size=batch_size,
         collate_fn=pretraining_collate_function)
 
     val_dataloader = DataLoader(
         val_dataset,
-        batch_size=config['batch_size'],
+        batch_size=batch_size,
         collate_fn=pretraining_collate_function)
 
     optimizer = NoamOptimizer(model.parameters(),
-        d_model=config['hidden_size'], factor=2, warmup_steps=10000, betas=(0.9, 0.999), weight_decay=0.01)
+                              d_model=hidden_size, factor=2, warmup_steps=10000, betas=(0.9, 0.999), weight_decay=0.01)
+
+    checkpoint_dir = make_checkpoint_dir(checkpoint_dir, run_name, config)
 
     logger.info('Start training...')
     trainer = Trainer(
@@ -88,44 +93,40 @@ def pretrain(config):
         val_dataloader=val_dataloader,
         metric_functions=metric_functions,
         optimizer=optimizer,
-        clip_grads=config['clip_grads'],
+        clip_grads=clip_grads,
         logger=logger,
-        run_name=config['run_name'],
-        config_output=config['config_output'],
-        checkpoint_output=config['checkpoint_output'],
-        config=config
+        checkpoint_dir=checkpoint_dir,
+        print_every=print_every,
+        save_every=save_every,
+        device=device
     )
 
-    trainer.run(epochs=config['epochs'])
+    trainer.run(epochs=epochs)
     return trainer
 
 
-def finetune(config):
+def finetune(pretrained_checkpoint,
+             data_dir, train_path, val_path, dictionary_path,
+             vocabulary_size, batch_size, max_len, epochs, lr, clip_grads, device,
+             layers_count, hidden_size, heads_count, d_ff, dropout_prob,
+             log_output, checkpoint_dir, print_every, save_every, config, run_name=None, **_):
+
     random.seed(0)
     np.random.seed(0)
     torch.manual_seed(0)
 
-    data_dir = config['data_dir']
-    if data_dir is not None:
-        train_path = join(data_dir, config['train_data'])
-        val_path = join(data_dir, config['val_data'])
-    else:
-        train_path = config['train_data']
-        val_path = config['val_data']
-    config['dictionary_path'] = config['dictionary']
+    train_path = train_path if data_dir is None else join(data_dir, train_path)
+    val_path = val_path if data_dir is None else join(data_dir, val_path)
+    dictionary_path = dictionary_path if data_dir is None else join(data_dir, dictionary_path)
 
-    if 'run_name' not in config:
-        config['run_name'] = make_run_name(config, phase='finetune')
-    if 'log_filepath' not in config:
-        config['log_filepath'] = make_log_filepath(config)
-
-    logger = get_logger(config['run_name'], config['log_filepath'])
-    logger.info('Run name : {run_name}'.format(run_name=config['run_name']))
+    run_name = run_name if run_name is not None else make_run_name(RUN_NAME_FORMAT, phase='finetune', config=config)
+    logger = make_logger(run_name, log_output)
+    logger.info('Run name : {run_name}'.format(run_name=run_name))
     logger.info(config)
 
     logger.info('Constructing dictionaries...')
-    dictionary = IndexDictionary.load(dictionary_path=config['dictionary_path'],
-                                      vocabulary_size=config['vocabulary_size'])
+    dictionary = IndexDictionary.load(dictionary_path=dictionary_path,
+                                      vocabulary_size=vocabulary_size)
     vocabulary_size = len(dictionary)
     logger.info(f'dictionary vocabulary : {vocabulary_size} tokens')
 
@@ -135,10 +136,10 @@ def finetune(config):
     logger.info('Train dataset size : {dataset_size}'.format(dataset_size=len(train_dataset)))
 
     logger.info('Building model...')
-    pretrained_model = build_model(config, vocabulary_size)
-    pretrained_model.load_state_dict(torch.load(config['pretrained_checkpoint']))
+    pretrained_model = build_model(layers_count, hidden_size, heads_count, d_ff, dropout_prob, max_len, vocabulary_size)
+    pretrained_model.load_state_dict(torch.load(pretrained_checkpoint, map_location='cpu')['state_dict'])
 
-    model = FineTuneModel(pretrained_model, 2, config)
+    model = FineTuneModel(pretrained_model, hidden_size, num_classes=2)
 
     logger.info(model)
     logger.info('{parameters_count} parameters'.format(
@@ -149,15 +150,17 @@ def finetune(config):
 
     train_dataloader = DataLoader(
         train_dataset,
-        batch_size=config['batch_size'],
+        batch_size=batch_size,
         collate_fn=classification_collate_function)
 
     val_dataloader = DataLoader(
         val_dataset,
-        batch_size=config['batch_size'],
+        batch_size=batch_size,
         collate_fn=classification_collate_function)
 
-    optimizer = Adam(model.parameters(), lr=config['lr'])
+    optimizer = Adam(model.parameters(), lr=lr)
+
+    checkpoint_dir = make_checkpoint_dir(checkpoint_dir, run_name, config)
 
     logger.info('Start training...')
     trainer = Trainer(
@@ -166,13 +169,13 @@ def finetune(config):
         val_dataloader=val_dataloader,
         metric_functions=metric_functions,
         optimizer=optimizer,
-        clip_grads=config['clip_grads'],
+        clip_grads=clip_grads,
         logger=logger,
-        run_name=config['run_name'],
-        config_output=config['config_output'],
-        checkpoint_output=config['checkpoint_output'],
-        config=config
+        checkpoint_dir=checkpoint_dir,
+        print_every=print_every,
+        save_every=save_every,
+        device=device
     )
 
-    trainer.run(epochs=config['epochs'])
+    trainer.run(epochs=epochs)
     return trainer
