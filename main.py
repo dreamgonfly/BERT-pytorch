@@ -1,7 +1,7 @@
-from bert_train.train import pretrain, finetune
-from bert_preprocess.preprocess import preprocess_all
-from bert_preprocess.preprocess import extract_articles_wiki, detect_sentences, split_sentences
-from bert_preprocess.preprocess import train_tokenizer, prepare_documents, split_train_val, build_dictionary
+from bert.train.train import pretrain, finetune
+from bert.preprocess.preprocess import preprocess_all
+from bert.preprocess.preprocess import extract_articles_wiki, detect_sentences, split_sentences
+from bert.preprocess.preprocess import train_tokenizer, prepare_documents, split_train_val, build_dictionary
 
 import torch
 
@@ -149,8 +149,7 @@ finetune_parser.add_argument('--dropout_prob', type=float, default=0.1)
 finetune_parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu')
 
 
-if __name__ == '__main__':
-
+def main():
     args = parser.parse_args()
 
     if args.config is not None:
@@ -165,3 +164,7 @@ if __name__ == '__main__':
         config = vars(args)  # convert to dictionary
 
     args.function(config)
+
+
+if __name__ == '__main__':
+    main()

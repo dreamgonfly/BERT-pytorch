@@ -1,4 +1,4 @@
-from bert_preprocess import PAD_INDEX, MASK_INDEX, CLS_INDEX, SEP_INDEX
+from bert.preprocess import PAD_INDEX, MASK_INDEX, CLS_INDEX, SEP_INDEX
 
 from tqdm import tqdm
 

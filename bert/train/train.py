@@ -1,6 +1,6 @@
-from bert_preprocess.dictionary import IndexDictionary
+from bert.preprocess.dictionary import IndexDictionary
 
-from .models.bert import build_model, FineTuneModel
+from .model.bert import build_model, FineTuneModel
 from .loss_models import MLMNSPLossModel, ClassificationLossModel
 from .metrics import mlm_accuracy, nsp_accuracy, classification_accuracy
 from .datasets.pretraining import PairedDataset

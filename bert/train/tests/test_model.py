@@ -1,4 +1,4 @@
-from bert_train.models.bert import build_model
+from bert.train.model.bert import build_model
 
 import torch
 from torch import nn
