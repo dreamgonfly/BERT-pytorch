@@ -136,7 +136,7 @@ class Trainer:
 
                 self.logger.info(log_message)
 
-            if epoch % self.save_every == 0 and epoch > 0:
+            if epoch % self.save_every == 0:
                 self._save_model(epoch, train_epoch_loss, val_epoch_loss, train_epoch_metrics, val_epoch_metrics)
 
     def _save_model(self, epoch, train_epoch_loss, val_epoch_loss, train_epoch_metrics, val_epoch_metrics):
@@ -165,7 +165,8 @@ class Trainer:
             torch.save(self.loss_model.module.state_dict(), checkpoint_output_path)
         else:
             torch.save(self.loss_model.state_dict(), checkpoint_output_path)
-        self.history.append(save_state)
+        if epoch > 0:
+            self.history.append(save_state)
 
         representative_val_metric = val_epoch_metrics[0]
         if self.best_val_metric is None or self.best_val_metric > representative_val_metric:
@@ -175,7 +176,7 @@ class Trainer:
             self.train_metrics_at_best = train_epoch_metrics
             self.train_loss_at_best = train_epoch_loss
             self.best_checkpoint_output_path = checkpoint_output_path
-            self.best_epoch = self.epoch
+            self.best_epoch = epoch
 
         if self.logger:
             self.logger.info("Saved model to {}".format(checkpoint_output_path))

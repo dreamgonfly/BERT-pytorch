@@ -8,6 +8,7 @@ from .datasets.classification import SST2IndexedDataset
 from .trainer import Trainer
 from .utils.log import get_logger, make_run_name, make_log_filepath
 from .utils.collate import pretraining_collate_function, classification_collate_function
+from .optimizers import NoamOptimizer
 
 import torch
 from torch.nn import DataParallel
@@ -77,7 +78,8 @@ def pretrain(config):
         batch_size=config['batch_size'],
         collate_fn=pretraining_collate_function)
 
-    optimizer = Adam(model.parameters(), lr=config['lr'])
+    optimizer = NoamOptimizer(model.parameters(),
+        d_model=config['hidden_size'], factor=2, warmup_steps=10000, betas=(0.9, 0.999), weight_decay=0.01)
 
     logger.info('Start training...')
     trainer = Trainer(
