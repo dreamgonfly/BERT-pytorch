@@ -1,0 +1,20 @@
+{
+  "data_dir": "data/wiki",
+  "train_path": "train.txt",
+  "val_path": "val.txt",
+  "dictionary_path": "dictionary.txt",
+  "dataset_limit": null,
+  "epochs": 8,
+  "batch_size": 90,
+  "print_every": 1,
+  "save_every": 1,
+  "vocabulary_size": 30000,
+  "max_len": 512,
+  "lr": 0.0002,
+  "clip_grads": false,
+  "layers_count": 6,
+  "hidden_size": 384,
+  "heads_count": 6,
+  "d_ff": 1536,
+  "dropout_prob": 0.1
+}
